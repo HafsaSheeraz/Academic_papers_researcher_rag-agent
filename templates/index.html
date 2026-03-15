@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAG Agent — Document Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #16161f;
+    --border: #1e1e2e;
+    --accent: #7c6af7;
+    --accent2: #a78bfa;
+    --accent-dim: rgba(124, 106, 247, 0.12);
+    --accent-glow: rgba(124, 106, 247, 0.25);
+    --text: #e8e8f0;
+    --text-muted: #6b6b8a;
+    --text-dim: #3a3a55;
+    --green: #4ade80;
+    --green-dim: rgba(74, 222, 128, 0.1);
+    --red: #f87171;
+    --amber: #fbbf24;
+    --user-bubble: #1a1a2e;
+    --ai-bubble: #0f0f1a;
+    --radius: 14px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    height: 100vh;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    grid-template-rows: 56px 1fr;
+  }
+
+  /* ── HEADER ── */
+  header {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: relative;
+    z-index: 10;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 18px;
+    letter-spacing: -0.5px;
+  }
+
+  .logo-icon {
+    width: 28px; height: 28px;
+    background: linear-gradient(135deg, var(--accent), #a855f7);
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    font-size: 14px;
+  }
+
+  .logo span { color: var(--accent2); }
+
+  .header-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ── SIDEBAR ── */
+  aside {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .sidebar-section {
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  /* ── UPLOAD ZONE ── */
+  .upload-zone {
+    border: 1.5px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 20px 16px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: transparent;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .upload-zone:hover, .upload-zone.dragover {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  .upload-icon {
+    font-size: 24px;
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  .upload-zone p {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+
+  .upload-zone strong {
+    color: var(--accent2);
+    font-weight: 500;
+  }
+
+  #file-input { display: none; }
+
+  /* ── TEXT INPUT ── */
+  .text-paste-area {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    resize: none;
+    height: 70px;
+    outline: none;
+    transition: border-color 0.2s;
+    margin-bottom: 8px;
+  }
+
+  .text-paste-area:focus { border-color: var(--accent); }
+  .text-paste-area::placeholder { color: var(--text-dim); }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+    width: 100%;
+  }
+
+  .btn-primary:hover { background: var(--accent2); transform: translateY(-1px); }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    width: 100%;
+    margin-top: 6px;
+  }
+
+  .btn-ghost:hover { border-color: var(--red); color: var(--red); }
+
+  /* ── DOCUMENT LIST ── */
+  .docs-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+  }
+
+  .doc-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 8px;
+    transition: border-color 0.2s;
+  }
+
+  .doc-item:hover { border-color: var(--accent); }
+
+  .doc-icon {
+    font-size: 16px;
+    margin-top: 1px;
+    flex-shrink: 0;
+  }
+
+  .doc-info { flex: 1; min-width: 0; }
+
+  .doc-name {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 3px;
+  }
+
+  .doc-meta {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+  }
+
+  .doc-badge {
+    background: var(--accent-dim);
+    color: var(--accent2);
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+
+  .empty-docs {
+    text-align: center;
+    padding: 24px 0;
+    color: var(--text-dim);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+
+  /* ── MAIN CHAT ── */
+  main {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg);
+    position: relative;
+  }
+
+  /* Background grid pattern */
+  main::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(124, 106, 247, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(124, 106, 247, 0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+  }
+
+  /* ── CHAT MESSAGES ── */
+  #chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    position: relative;
+    z-index: 1;
+  }
+
+  #chat-messages::-webkit-scrollbar { width: 4px; }
+  #chat-messages::-webkit-scrollbar-track { background: transparent; }
+  #chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* Welcome state */
+  .welcome {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    text-align: center;
+    gap: 16px;
+    padding: 40px;
+  }
+
+  .welcome-orb {
+    width: 72px; height: 72px;
+    background: linear-gradient(135deg, var(--accent), #a855f7, #ec4899);
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 30px;
+    box-shadow: 0 0 40px rgba(124, 106, 247, 0.3);
+    animation: float 3s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+  }
+
+  .welcome h2 {
+    font-family: 'Syne', sans-serif;
+    font-size: 26px;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--text), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .welcome p {
+    color: var(--text-muted);
+    font-size: 14px;
+    max-width: 400px;
+    line-height: 1.6;
+  }
+
+  .welcome-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 8px;
+  }
+
+  .chip {
+    padding: 6px 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    font-size: 12px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .chip:hover {
+    border-color: var(--accent);
+    color: var(--accent2);
+    background: var(--accent-dim);
+  }
+
+  /* Message bubbles */
+  .message {
+    display: flex;
+    gap: 12px;
+    max-width: 820px;
+    animation: slideUp 0.3s ease;
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .message.user { align-self: flex-end; flex-direction: row-reverse; }
+  .message.assistant { align-self: flex-start; }
+
+  .avatar {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 14px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .user .avatar {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    font-size: 12px;
+  }
+
+  .assistant .avatar {
+    background: linear-gradient(135deg, #0f172a, #1e1b4b);
+    border: 1px solid var(--border);
+    font-size: 14px;
+  }
+
+  .bubble {
+    padding: 12px 16px;
+    border-radius: var(--radius);
+    font-size: 14px;
+    line-height: 1.65;
+    max-width: 680px;
+    position: relative;
+  }
+
+  .user .bubble {
+    background: var(--user-bubble);
+    border: 1px solid rgba(124, 106, 247, 0.2);
+    color: var(--text);
+    border-bottom-right-radius: 4px;
+  }
+
+  .assistant .bubble {
+    background: var(--ai-bubble);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-bottom-left-radius: 4px;
+  }
+
+  .bubble p { margin-bottom: 8px; }
+  .bubble p:last-child { margin-bottom: 0; }
+  .bubble code {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    background: rgba(124, 106, 247, 0.12);
+    padding: 1px 5px;
+    border-radius: 4px;
+    color: var(--accent2);
+  }
+  .bubble pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    overflow-x: auto;
+    margin: 8px 0;
+  }
+  .bubble pre code {
+    background: none;
+    padding: 0;
+    color: var(--text);
+  }
+  .bubble strong { color: var(--accent2); font-weight: 600; }
+
+  .rag-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    background: var(--green-dim);
+    color: var(--green);
+    border: 1px solid rgba(74, 222, 128, 0.2);
+    padding: 3px 8px;
+    border-radius: 100px;
+    margin-bottom: 6px;
+  }
+
+  /* Typing indicator */
+  .typing {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    padding: 14px 16px;
+  }
+
+  .typing span {
+    width: 6px; height: 6px;
+    background: var(--text-muted);
+    border-radius: 50%;
+    animation: bounce 1.2s infinite;
+  }
+
+  .typing span:nth-child(2) { animation-delay: 0.2s; }
+  .typing span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes bounce {
+    0%, 80%, 100% { transform: translateY(0); opacity: 0.3; }
+    40% { transform: translateY(-5px); opacity: 1; }
+  }
+
+  /* ── INPUT BAR ── */
+  .input-bar {
+    padding: 16px 32px 20px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    position: relative;
+    z-index: 5;
+  }
+
+  .input-wrap {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    border-radius: 14px;
+    padding: 10px 14px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .input-wrap:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+  }
+
+  #user-input {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    resize: none;
+    max-height: 120px;
+    line-height: 1.5;
+    padding: 2px 0;
+  }
+
+  #user-input::placeholder { color: var(--text-dim); }
+
+  #send-btn {
+    width: 36px; height: 36px;
+    background: var(--accent);
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+    color: white;
+    font-size: 15px;
+  }
+
+  #send-btn:hover { background: var(--accent2); transform: scale(1.05); }
+  #send-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  .input-hint {
+    margin-top: 8px;
+    text-align: center;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+
+  /* ── TOAST ── */
+  #toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    z-index: 100;
+    max-width: 300px;
+  }
+
+  #toast.show { transform: translateY(0); opacity: 1; }
+  #toast.success { border-color: var(--green); color: var(--green); }
+  #toast.error { border-color: var(--red); color: var(--red); }
+
+  /* ── PROGRESS ── */
+  .upload-progress {
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-top: 8px;
+    overflow: hidden;
+    display: none;
+  }
+
+  .upload-progress.active { display: block; }
+
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.3s;
+    animation: shimmer 1.5s infinite;
+  }
+
+  @keyframes shimmer {
+    0% { filter: brightness(1); }
+    50% { filter: brightness(1.3); }
+    100% { filter: brightness(1); }
+  }
+
+  /* Scrollbar */
+  .docs-list::-webkit-scrollbar { width: 4px; }
+  .docs-list::-webkit-scrollbar-track { background: transparent; }
+  .docs-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* markdown rendering */
+  .bubble h1, .bubble h2, .bubble h3 {
+    font-family: 'Syne', sans-serif;
+    margin: 10px 0 6px;
+    color: var(--text);
+  }
+  .bubble h1 { font-size: 18px; }
+  .bubble h2 { font-size: 16px; }
+  .bubble h3 { font-size: 14px; color: var(--accent2); }
+  .bubble ul, .bubble ol { padding-left: 20px; margin: 6px 0; }
+  .bubble li { margin-bottom: 4px; }
+  .bubble blockquote {
+    border-left: 3px solid var(--accent);
+    padding-left: 12px;
+    color: var(--text-muted);
+    margin: 8px 0;
+    font-style: italic;
+  }
+  .bubble hr { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
+
+  @media (max-width: 768px) {
+    body { grid-template-columns: 1fr; grid-template-rows: 56px auto 1fr auto; }
+    aside { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">🧠</div>
+    RAG <span>Agent</span>
+  </div>
+  <div class="header-status">
+    <div class="status-dot"></div>
+    claude-sonnet · rag-enabled
+  </div>
+</header>
+
+<!-- SIDEBAR -->
+<aside>
+  <div class="sidebar-section">
+    <div class="section-label">Upload Documents</div>
+    
+    <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+      <input type="file" id="file-input" accept=".txt,.md,.py,.js,.html,.css,.json,.csv">
+      <span class="upload-icon">📄</span>
+      <p><strong>Click to upload</strong> or drag & drop<br>TXT, MD, PY, JS, HTML, CSV, JSON</p>
+    </div>
+    <div class="upload-progress" id="upload-progress">
+      <div class="progress-bar" id="progress-bar"></div>
+    </div>
+    
+    <div style="margin-top:12px; font-size:11px; color:var(--text-muted); margin-bottom:6px;">Or paste text directly:</div>
+    <textarea class="text-paste-area" id="paste-text" placeholder="Paste any text content here..."></textarea>
+    <button class="btn btn-primary" onclick="uploadPastedText()">
+      ⚡ Index Text
+    </button>
+  </div>
+
+  <div style="padding:12px 16px 4px; flex-shrink:0;">
+    <div class="section-label">Indexed Documents</div>
+  </div>
+  
+  <div class="docs-list" id="docs-list">
+    <div class="empty-docs" id="empty-docs">
+      No documents yet.<br>Upload files to enable<br>RAG-powered answers.
+    </div>
+  </div>
+
+  <div style="padding:0 16px 16px; flex-shrink:0;">
+    <button class="btn btn-ghost" onclick="clearAll()">🗑 Clear All</button>
+  </div>
+</aside>
+
+<!-- MAIN CHAT -->
+<main>
+  <div id="chat-messages">
+    <div class="welcome" id="welcome-screen">
+      <div class="welcome-orb">🔮</div>
+      <h2>Document Intelligence</h2>
+      <p>Upload documents to your knowledge base, then ask questions. I'll retrieve the most relevant context and give you precise answers.</p>
+      <div class="welcome-chips">
+        <div class="chip" onclick="sendChip('What can you help me with?')">What can you do?</div>
+        <div class="chip" onclick="sendChip('How does RAG work?')">How does RAG work?</div>
+        <div class="chip" onclick="sendChip('Summarize my documents')">Summarize docs</div>
+        <div class="chip" onclick="sendChip('What topics are covered in my documents?')">What topics?</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="input-bar">
+    <div class="input-wrap">
+      <textarea id="user-input" rows="1" placeholder="Ask anything about your documents..." 
+                oninput="autoResize(this)" onkeydown="handleKey(event)"></textarea>
+      <button id="send-btn" onclick="sendMessage()">➤</button>
+    </div>
+    <div class="input-hint">Enter to send · Shift+Enter for new line</div>
+  </div>
+</main>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+// ── UTILS ──
+function showToast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  t.textContent = (type === 'success' ? '✓ ' : '✗ ') + msg;
+  t.className = `show ${type}`;
+  setTimeout(() => t.className = '', 3000);
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+}
+
+function sendChip(text) {
+  document.getElementById('user-input').value = text;
+  sendMessage();
+}
+
+// ── UPLOAD ──
+const uploadZone = document.getElementById('upload-zone');
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) uploadFile(file);
+});
+
+document.getElementById('file-input').addEventListener('change', e => {
+  if (e.target.files[0]) uploadFile(e.target.files[0]);
+});
+
+async function uploadFile(file) {
+  const prog = document.getElementById('upload-progress');
+  const bar = document.getElementById('progress-bar');
+  prog.classList.add('active');
+  bar.style.width = '30%';
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  try {
+    bar.style.width = '70%';
+    const res = await fetch('/upload', { method: 'POST', body: formData });
+    bar.style.width = '100%';
+    const data = await res.json();
+    
+    if (data.success) {
+      showToast(`"${file.name}" indexed — ${data.chunks} chunks`);
+      loadDocuments();
+    } else {
+      showToast(data.error || 'Upload failed', 'error');
+    }
+  } catch (err) {
+    showToast('Upload failed', 'error');
+  }
+
+  setTimeout(() => {
+    prog.classList.remove('active');
+    bar.style.width = '0%';
+  }, 600);
+}
+
+async function uploadPastedText() {
+  const text = document.getElementById('paste-text').value.trim();
+  if (!text) { showToast('Please enter some text', 'error'); return; }
+
+  const formData = new FormData();
+  formData.append('text', text);
+  formData.append('name', `pasted_${Date.now()}.txt`);
+
+  try {
+    const res = await fetch('/upload', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (data.success) {
+      showToast(`Text indexed — ${data.chunks} chunks`);
+      document.getElementById('paste-text').value = '';
+      loadDocuments();
+    } else {
+      showToast(data.error || 'Failed', 'error');
+    }
+  } catch (err) {
+    showToast('Failed to index text', 'error');
+  }
+}
+
+async function loadDocuments() {
+  const res = await fetch('/documents');
+  const data = await res.json();
+  const list = document.getElementById('docs-list');
+  const empty = document.getElementById('empty-docs');
+  
+  const docs = data.documents;
+  
+  if (docs.length === 0) {
+    empty.style.display = 'block';
+    list.querySelectorAll('.doc-item').forEach(el => el.remove());
+    return;
+  }
+  
+  empty.style.display = 'none';
+  list.querySelectorAll('.doc-item').forEach(el => el.remove());
+  
+  const icons = { txt:'📄', md:'📝', py:'🐍', js:'⚡', html:'🌐', css:'🎨', json:'📦', csv:'📊' };
+  
+  docs.forEach(doc => {
+    const ext = doc.name.split('.').pop().toLowerCase();
+    const icon = icons[ext] || '📄';
+    const el = document.createElement('div');
+    el.className = 'doc-item';
+    el.innerHTML = `
+      <span class="doc-icon">${icon}</span>
+      <div class="doc-info">
+        <div class="doc-name" title="${doc.name}">${doc.name}</div>
+        <div class="doc-meta">${doc.char_count.toLocaleString()} chars</div>
+      </div>
+      <span class="doc-badge">${doc.total_chunks}c</span>
+    `;
+    list.appendChild(el);
+  });
+}
+
+async function clearAll() {
+  await fetch('/documents/clear', { method: 'DELETE' });
+  await fetch('/chat/clear', { method: 'DELETE' });
+  loadDocuments();
+  document.getElementById('chat-messages').innerHTML = '';
+  document.getElementById('chat-messages').appendChild(createWelcome());
+  showToast('Cleared all data');
+}
+
+function createWelcome() {
+  const div = document.createElement('div');
+  div.className = 'welcome';
+  div.id = 'welcome-screen';
+  div.innerHTML = `
+    <div class="welcome-orb">🔮</div>
+    <h2>Document Intelligence</h2>
+    <p>Upload documents to your knowledge base, then ask questions. I'll retrieve the most relevant context and give you precise answers.</p>
+    <div class="welcome-chips">
+      <div class="chip" onclick="sendChip('What can you help me with?')">What can you do?</div>
+      <div class="chip" onclick="sendChip('How does RAG work?')">How does RAG work?</div>
+      <div class="chip" onclick="sendChip('Summarize my documents')">Summarize docs</div>
+      <div class="chip" onclick="sendChip('What topics are covered in my documents?')">What topics?</div>
+    </div>
+  `;
+  return div;
+}
+
+// ── CHAT ──
+let isLoading = false;
+
+function simpleMarkdown(text) {
+  return text
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+    .replace(/^---$/gm, '<hr>')
+    .replace(/^\- (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>\n?)+/g, s => `<ul>${s}</ul>`)
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br>')
+    .replace(/^(.+)$/, '<p>$1</p>');
+}
+
+async function sendMessage() {
+  if (isLoading) return;
+  const input = document.getElementById('user-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+
+  // Remove welcome
+  const welcome = document.getElementById('welcome-screen');
+  if (welcome) welcome.remove();
+
+  // Add user message
+  addMessage('user', msg);
+  input.value = '';
+  input.style.height = 'auto';
+
+  // Add typing
+  const typingId = addTyping();
+  isLoading = true;
+  document.getElementById('send-btn').disabled = true;
+
+  try {
+    const res = await fetch('/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg })
+    });
+    const data = await res.json();
+
+    removeTyping(typingId);
+
+    if (data.error) {
+      addMessage('assistant', `❌ Error: ${data.error}`, false);
+    } else {
+      addMessage('assistant', data.response, data.rag_active);
+    }
+  } catch (err) {
+    removeTyping(typingId);
+    addMessage('assistant', '❌ Connection error. Please check your API key.', false);
+  }
+
+  isLoading = false;
+  document.getElementById('send-btn').disabled = false;
+  input.focus();
+}
+
+function addMessage(role, content, ragActive = false) {
+  const container = document.getElementById('chat-messages');
+  const msg = document.createElement('div');
+  msg.className = `message ${role}`;
+
+  const avatar = role === 'user' ? '👤' : '🤖';
+  const ragBadge = (role === 'assistant' && ragActive)
+    ? '<div class="rag-badge">⚡ RAG · context retrieved</div>'
+    : '';
+
+  msg.innerHTML = `
+    <div class="avatar">${avatar}</div>
+    <div class="bubble">
+      ${ragBadge}
+      ${simpleMarkdown(content)}
+    </div>
+  `;
+
+  container.appendChild(msg);
+  container.scrollTop = container.scrollHeight;
+}
+
+function addTyping() {
+  const container = document.getElementById('chat-messages');
+  const id = 'typing-' + Date.now();
+  const el = document.createElement('div');
+  el.className = 'message assistant';
+  el.id = id;
+  el.innerHTML = `
+    <div class="avatar">🤖</div>
+    <div class="bubble">
+      <div class="typing"><span></span><span></span><span></span></div>
+    </div>
+  `;
+  container.appendChild(el);
+  container.scrollTop = container.scrollHeight;
+  return id;
+}
+
+function removeTyping(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+}
+
+// Init
+loadDocuments();
+</script>
+</body>
+</html>
